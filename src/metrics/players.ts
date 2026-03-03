@@ -1,9 +1,16 @@
 import { prisma } from "../db/prisma";
-import { DoQuery } from "../db/mysql";
 import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
 
 export async function PlayersProcess() {
-    const playerRows = await DoQuery("SELECT max_last_24_hours, max_last_7_days, max_last_30_days, timestamp FROM players_data WHERE timestamp IS NOT NULL AND timestamp >= (UTC_TIMESTAMP() - INTERVAL 30 DAY)", []);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const playerRows = await prisma.playersData.findMany({
+        where: {
+            Timestamp: {
+                gte: thirtyDaysAgo
+            }
+        }
+    })
 
     const now = new Date();
 
@@ -32,45 +39,33 @@ export async function PlayersProcess() {
     }
 
     for (const pr of playerRows) {
-        if (pr.max_last_24_hours != null && pr.max_last_24_hours !== "") {
-            try {
-                const data24: Record<string, number> = JSON.parse(pr.max_last_24_hours);
-                for (const [timeKey, playerCount] of Object.entries(data24)) {
-                    if (timeKey in players24) {
-                        players24[timeKey] += playerCount;
-                    }
+        try {
+            const data24: any = pr.MaxLast24Hours;
+            for (const [timeKey, playerCount] of Object.entries(data24)) {
+                if (timeKey in players24) {
+                    players24[timeKey] += playerCount as any;
                 }
-            } catch (e) { }
-        }
+            }
+        } catch (e) { }
 
-        if (pr.max_last_7_days != null && pr.max_last_7_days !== "") {
-            try {
-                const data7: Record<string, number> = JSON.parse(pr.max_last_7_days);
-                for (const [timeKey, playerCount] of Object.entries(data7)) {
-                    if (timeKey in players7) {
-                        players7[timeKey] += playerCount;
-                    }
+        try {
+            const data7: any = pr.MaxLast7Days;
+            for (const [timeKey, playerCount] of Object.entries(data7)) {
+                if (timeKey in players7) {
+                    players7[timeKey] += playerCount as any;
                 }
-            } catch (e) { }
-        }
+            }
+        } catch (e) { }
 
-        if (pr.max_last_30_days != null && pr.max_last_30_days !== "") {
-            try {
-                const data30: Record<string, number> = JSON.parse(pr.max_last_30_days);
-                for (const [timeKey, playerCount] of Object.entries(data30)) {
-                    if (timeKey in players30) {
-                        players30[timeKey] += playerCount;
-                    }
+        try {
+            const data30: any = pr.MaxLast30Days;
+            for (const [timeKey, playerCount] of Object.entries(data30)) {
+                if (timeKey in players30) {
+                    players30[timeKey] += playerCount as any;
                 }
-            } catch (e) { }
-        }
+            }
+        } catch (e) { }
     }
-
-    await DoQuery("UPDATE metrics SET players_last_24h = ?, players_last_7d = ?, players_last_30d = ? WHERE id = 1", [
-        JSON.stringify(players24),
-        JSON.stringify(players7),
-        JSON.stringify(players30)
-    ]);
 
     await prisma.metrics.update({
         where: { ID: 1 },

@@ -1,9 +1,20 @@
 import { prisma } from "../db/prisma"
-import { DoQuery } from "../db/mysql";
 import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
 
 export async function FilterProcess() {
-    const filteredRows = await DoQuery("SELECT last_updated FROM ip_list WHERE last_updated IS NOT NULL AND last_updated >= (UTC_TIMESTAMP() - INTERVAL 30 DAY) AND status >= 2 AND status != 5 AND status != 9", []);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const filteredRows = await prisma.server.findMany({
+        where: {
+            LastUpdated: {
+                gte: thirtyDaysAgo
+            },
+            Status: {
+                gte: 2,
+                notIn: [5, 9]
+            }
+        }
+    });
 
     const now = new Date();
 
@@ -36,7 +47,7 @@ export async function FilterProcess() {
     const cutoff30 = new Date(truncateToDay(now).getTime() - 29 * 24 * 60 * 60 * 1000);
 
     for (const r of filteredRows) {
-        const t = new Date(r.last_updated);
+        const t = r.LastUpdated!;
 
         if (t >= cutoff24) {
             const hk = formatHourKey(truncateToHour(t));
@@ -58,12 +69,6 @@ export async function FilterProcess() {
             }
         }
     }
-
-    await DoQuery("UPDATE metrics SET checked_last_24h = ?, checked_last_7d = ?, checked_last_30d = ? WHERE id = 1", [
-        JSON.stringify(checked24),
-        JSON.stringify(checked7),
-        JSON.stringify(checked30)
-    ]);
 
     await prisma.metrics.update({
         where: { ID: 1 },
