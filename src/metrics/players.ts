@@ -1,16 +1,11 @@
-import { prisma } from "../db/prisma";
 import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
+import { db } from "../db/drizzle"
+import { metrics, playersData } from "../../generated/drizzle/schema";
+import { eq, gte } from "drizzle-orm";
 
 export async function PlayersProcess() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const playerRows = await prisma.playersData.findMany({
-        where: {
-            Timestamp: {
-                gte: thirtyDaysAgo
-            }
-        }
-    })
+    const playerRows = await db.select().from(playersData).where(gte(playersData.timestamp, thirtyDaysAgo.toISOString()));
 
     const now = new Date();
 
@@ -40,7 +35,7 @@ export async function PlayersProcess() {
 
     for (const pr of playerRows) {
         try {
-            const data24: any = pr.MaxLast24Hours;
+            const data24: any = pr.maxLast24Hours;
             for (const [timeKey, playerCount] of Object.entries(data24)) {
                 if (timeKey in players24) {
                     players24[timeKey] += playerCount as any;
@@ -49,7 +44,7 @@ export async function PlayersProcess() {
         } catch (e) { }
 
         try {
-            const data7: any = pr.MaxLast7Days;
+            const data7: any = pr.maxLast7Days;
             for (const [timeKey, playerCount] of Object.entries(data7)) {
                 if (timeKey in players7) {
                     players7[timeKey] += playerCount as any;
@@ -58,7 +53,7 @@ export async function PlayersProcess() {
         } catch (e) { }
 
         try {
-            const data30: any = pr.MaxLast30Days;
+            const data30: any = pr.maxLast30Days;
             for (const [timeKey, playerCount] of Object.entries(data30)) {
                 if (timeKey in players30) {
                     players30[timeKey] += playerCount as any;
@@ -67,12 +62,9 @@ export async function PlayersProcess() {
         } catch (e) { }
     }
 
-    await prisma.metrics.update({
-        where: { ID: 1 },
-        data: {
-            PlayersLast24Hours: players24,
-            PlayersLast7Days: players7,
-            PlayersLast30Days: players30
-        }
-    });
+    await db.update(metrics).set({
+        playersLast24Hours: players24,
+        playersLast7Days: players7,
+        playersLast30Days: players30
+    }).where(eq(metrics.id, 1));
 }

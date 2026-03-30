@@ -1,10 +1,8 @@
 
-import { config } from "dotenv";
+import "dotenv/config";
 import { PrefilterProcess } from "./metrics/prefilter";
 import { FilterProcess } from "./metrics/filter";
 import { PlayersProcess } from "./metrics/players";
-
-config();
 
 const RunTick = async () => {
     await PrefilterProcess();

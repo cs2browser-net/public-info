@@ -1,20 +1,18 @@
-import { prisma } from "../db/prisma"
 import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
+import { db } from "../db/drizzle"
+import { metrics, server } from "../../generated/drizzle/schema";
+import { and, eq, gte, notInArray } from "drizzle-orm";
 
 export async function FilterProcess() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const filteredRows = await prisma.server.findMany({
-        where: {
-            LastUpdated: {
-                gte: thirtyDaysAgo
-            },
-            Status: {
-                gte: 2,
-                notIn: [5, 9]
-            }
-        }
-    });
+    const filteredRows = await db.select().from(server).where(
+        and(
+            gte(server.lastUpdated, thirtyDaysAgo.toISOString()),
+            gte(server.status, 2),
+            notInArray(server.status, [5, 9])
+        )
+    )
 
     const now = new Date();
 
@@ -47,7 +45,7 @@ export async function FilterProcess() {
     const cutoff30 = new Date(truncateToDay(now).getTime() - 29 * 24 * 60 * 60 * 1000);
 
     for (const r of filteredRows) {
-        const t = r.LastUpdated!;
+        const t = new Date(r.lastUpdated!);
 
         if (t >= cutoff24) {
             const hk = formatHourKey(truncateToHour(t));
@@ -70,12 +68,9 @@ export async function FilterProcess() {
         }
     }
 
-    await prisma.metrics.update({
-        where: { ID: 1 },
-        data: {
-            CheckedLast24Hours: checked24,
-            CheckedLast7Days: checked7,
-            CheckedLast30Days: checked30
-        }
-    })
+    await db.update(metrics).set({
+        checkedLast24Hours: checked24,
+        checkedLast7Days: checked7,
+        checkedLast30Days: checked30
+    }).where(eq(metrics.id, 1));
 }

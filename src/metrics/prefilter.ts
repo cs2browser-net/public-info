@@ -1,29 +1,25 @@
 import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
-import { prisma } from "../db/prisma"
+import { db } from "../db/drizzle"
+import { and, count, eq, gte, isNull } from "drizzle-orm";
+import { metrics, server } from "../../generated/drizzle/schema";
 
 export async function PrefilterProcess() {
-    const totalPrefiltered = await prisma.server.count({
-        where: {
-            Status: {
-                gte: 2,
-            },
-            LastUpdated: {
-                equals: null
-            }
-        }
-    })
+    const totalPrefiltered = (await db.select({ count: count() }).from(server).where(
+        and(
+            gte(server.status, 2),
+            isNull(server.lastUpdated)
+        )
+    ))[0].count;
 
-    let metricsRow = await prisma.metrics.findFirst({
-        select: {
-            PrefilterLast24Hours: true,
-            PrefilterLast7Days: true,
-            PrefilterLast30Days: true
-        }
-    })
+    let metricsRow = (await db.select({
+        prefilterLast24h: metrics.prefilterLast24Hours,
+        prefilterLast7d: metrics.prefilterLast7Days,
+        prefilterLast30d: metrics.prefilterLast30Days
+    }).from(metrics).limit(1))[0]
 
-    const prefilterLast24h: any = metricsRow!.PrefilterLast24Hours
-    const prefilterLast7d: any = metricsRow!.PrefilterLast7Days
-    const prefilterLast30d: any = metricsRow!.PrefilterLast30Days
+    const prefilterLast24h: any = metricsRow!.prefilterLast24h
+    const prefilterLast7d: any = metricsRow!.prefilterLast7d
+    const prefilterLast30d: any = metricsRow!.prefilterLast30d
 
     const now = new Date();
     const hourStart = new Date(truncateToHour(now).getTime() - 23 * 60 * 60 * 1000);
@@ -77,14 +73,9 @@ export async function PrefilterProcess() {
 
     new30[currDayKey] = totalPrefiltered;
 
-    await prisma.metrics.update({
-        where: {
-            ID: 1
-        },
-        data: {
-            PrefilterLast24Hours: new24,
-            PrefilterLast7Days: new7,
-            PrefilterLast30Days: new30
-        }
-    })
+    await db.update(metrics).set({
+        prefilterLast24Hours: new24,
+        prefilterLast7Days: new7,
+        prefilterLast30Days: new30
+    }).where(eq(metrics.id, 1));
 }
