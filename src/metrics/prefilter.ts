@@ -1,9 +1,11 @@
-import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
+import { formatDayKey, formatHourKey, truncateToDayInPlace, truncateToHourInPlace } from "../utils/formatting";
 import { db } from "../db/drizzle"
 import { and, count, eq, gte, isNull } from "drizzle-orm";
 import { metrics, server } from "../../generated/drizzle/schema";
 
 export async function PrefilterProcess() {
+    const HOUR_MS = 60 * 60 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
     const totalPrefiltered = (await db.select({ count: count() }).from(server).where(
         and(
             gte(server.status, 2),
@@ -11,7 +13,7 @@ export async function PrefilterProcess() {
         )
     ))[0].count;
 
-    let metricsRow = (await db.select({
+    const metricsRow = (await db.select({
         prefilterLast24h: metrics.prefilterLast24Hours,
         prefilterLast7d: metrics.prefilterLast7Days,
         prefilterLast30d: metrics.prefilterLast30Days
@@ -22,13 +24,16 @@ export async function PrefilterProcess() {
     const prefilterLast30d: any = metricsRow!.prefilterLast30d
 
     const now = new Date();
-    const hourStart = new Date(truncateToHour(now).getTime() - 23 * 60 * 60 * 1000);
+    const truncatedHourNow = truncateToHourInPlace(new Date(), now);
+    const truncatedDayNow = truncateToDayInPlace(new Date(), now);
+    const hourStartMs = truncatedHourNow.getTime() - 23 * HOUR_MS;
 
     const new24: Record<string, number> = {};
+    const temporaryHourDate = new Date(hourStartMs);
 
     for (let i = 0; i < 24; i++) {
-        const d = new Date(hourStart.getTime() + i * 60 * 60 * 1000);
-        const k = formatHourKey(d);
+        temporaryHourDate.setTime(hourStartMs + i * HOUR_MS);
+        const k = formatHourKey(temporaryHourDate);
 
         if (prefilterLast24h[k]) {
             new24[k] = prefilterLast24h[k];
@@ -37,15 +42,16 @@ export async function PrefilterProcess() {
         }
     }
 
-    const currHourKey = formatHourKey(truncateToHour(now));
+    const currHourKey = formatHourKey(truncatedHourNow);
     new24[currHourKey] = totalPrefiltered;
 
-    const dayStart7 = new Date(truncateToDay(now).getTime() - 6 * 24 * 60 * 60 * 1000);
+    const dayStart7Ms = truncatedDayNow.getTime() - 6 * DAY_MS;
     const new7: Record<string, number> = {};
+    const temporaryDay7Date = new Date(dayStart7Ms);
 
     for (let i = 0; i < 7; i++) {
-        const d = new Date(dayStart7.getTime() + i * 24 * 60 * 60 * 1000);
-        const k = formatDayKey(d);
+        temporaryDay7Date.setTime(dayStart7Ms + i * DAY_MS);
+        const k = formatDayKey(temporaryDay7Date);
 
         if (prefilterLast7d[k]) {
             new7[k] = prefilterLast7d[k];
@@ -54,15 +60,16 @@ export async function PrefilterProcess() {
         }
     }
 
-    const currDayKey = formatDayKey(truncateToDay(now));
+    const currDayKey = formatDayKey(truncatedDayNow);
     new7[currDayKey] = totalPrefiltered;
 
-    const dayStart30 = new Date(truncateToDay(now).getTime() - 29 * 24 * 60 * 60 * 1000);
+    const dayStart30Ms = truncatedDayNow.getTime() - 29 * DAY_MS;
     const new30: Record<string, number> = {};
+    const temporaryDay30Date = new Date(dayStart30Ms);
 
     for (let i = 0; i < 30; i++) {
-        const d = new Date(dayStart30.getTime() + i * 24 * 60 * 60 * 1000);
-        const k = formatDayKey(d);
+        temporaryDay30Date.setTime(dayStart30Ms + i * DAY_MS);
+        const k = formatDayKey(temporaryDay30Date);
 
         if (prefilterLast30d[k]) {
             new30[k] = prefilterLast30d[k];

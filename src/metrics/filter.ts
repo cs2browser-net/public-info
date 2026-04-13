@@ -1,9 +1,11 @@
-import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
+import { formatDayKey, formatHourKey, setDateTimeFromDbString, truncateToDayInPlace, truncateToHourInPlace } from "../utils/formatting";
 import { db } from "../db/drizzle"
 import { metrics, server } from "../../generated/drizzle/schema";
 import { and, eq, gte, notInArray } from "drizzle-orm";
 
 export async function FilterProcess() {
+    const HOUR_MS = 60 * 60 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const filteredRows = await db.select().from(server).where(
@@ -15,53 +17,62 @@ export async function FilterProcess() {
     )
 
     const now = new Date();
+    const truncatedHourNow = truncateToHourInPlace(new Date(), now);
+    const truncatedDayNow = truncateToDayInPlace(new Date(), now);
 
     const checked24: Record<string, number> = {};
-    const chStart = new Date(truncateToHour(now).getTime() - 23 * 60 * 60 * 1000);
+    const chStartMs = truncatedHourNow.getTime() - 23 * HOUR_MS;
+    const temporaryChStartDate = new Date(chStartMs);
     for (let i = 0; i < 24; i++) {
-        const d = new Date(chStart.getTime() + i * 60 * 60 * 1000);
-        const k = formatHourKey(d);
+        temporaryChStartDate.setTime(chStartMs + i * HOUR_MS);
+        const k = formatHourKey(temporaryChStartDate);
         checked24[k] = 0;
     }
 
     const checked7: Record<string, number> = {};
-    const ch7Start = new Date(truncateToDay(now).getTime() - 6 * 24 * 60 * 60 * 1000);
+    const ch7StartMs = truncatedDayNow.getTime() - 6 * DAY_MS;
+    const temporaryCh7StartDate = new Date(ch7StartMs);
     for (let i = 0; i < 7; i++) {
-        const d = new Date(ch7Start.getTime() + i * 24 * 60 * 60 * 1000);
-        const k = formatDayKey(d);
+        temporaryCh7StartDate.setTime(ch7StartMs + i * DAY_MS);
+        const k = formatDayKey(temporaryCh7StartDate);
         checked7[k] = 0;
     }
 
     const checked30: Record<string, number> = {};
-    const ch30Start = new Date(truncateToDay(now).getTime() - 29 * 24 * 60 * 60 * 1000);
+    const ch30StartMs = truncatedDayNow.getTime() - 29 * DAY_MS;
+    const temporaryCh30StartDate = new Date(ch30StartMs);
     for (let i = 0; i < 30; i++) {
-        const d = new Date(ch30Start.getTime() + i * 24 * 60 * 60 * 1000);
-        const k = formatDayKey(d);
+        temporaryCh30StartDate.setTime(ch30StartMs + i * DAY_MS);
+        const k = formatDayKey(temporaryCh30StartDate);
         checked30[k] = 0;
     }
 
-    const cutoff24 = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const cutoff7 = new Date(truncateToDay(now).getTime() - 6 * 24 * 60 * 60 * 1000);
-    const cutoff30 = new Date(truncateToDay(now).getTime() - 29 * 24 * 60 * 60 * 1000);
+    const cutoff24Ms = now.getTime() - DAY_MS;
+    const cutoff7Ms = truncatedDayNow.getTime() - 6 * DAY_MS;
+    const cutoff30Ms = truncatedDayNow.getTime() - 29 * DAY_MS;
+    const filteredRowDate = new Date();
+    const truncatedFilteredHourDate = new Date();
+    const truncatedFilteredDayDate = new Date();
 
     for (const r of filteredRows) {
-        const t = new Date(r.lastUpdated!);
+        setDateTimeFromDbString(filteredRowDate, r.lastUpdated!);
+        const filteredRowMs = filteredRowDate.getTime();
 
-        if (t >= cutoff24) {
-            const hk = formatHourKey(truncateToHour(t));
+        if (filteredRowMs >= cutoff24Ms) {
+            const hk = formatHourKey(truncateToHourInPlace(truncatedFilteredHourDate, filteredRowDate));
             if (hk in checked24) {
                 checked24[hk]++;
             }
         }
 
-        const dk = formatDayKey(truncateToDay(t));
-        if (t >= cutoff7) {
+        const dk = formatDayKey(truncateToDayInPlace(truncatedFilteredDayDate, filteredRowDate));
+        if (filteredRowMs >= cutoff7Ms) {
             if (dk in checked7) {
                 checked7[dk]++;
             }
         }
 
-        if (t >= cutoff30) {
+        if (filteredRowMs >= cutoff30Ms) {
             if (dk in checked30) {
                 checked30[dk]++;
             }

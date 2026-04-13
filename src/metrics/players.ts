@@ -1,35 +1,42 @@
-import { formatDayKey, formatHourKey, truncateToDay, truncateToHour } from "../utils/formatting";
+import { formatDayKey, formatHourKey, truncateToDayInPlace, truncateToHourInPlace } from "../utils/formatting";
 import { db } from "../db/drizzle"
 import { metrics, playersData } from "../../generated/drizzle/schema";
 import { eq, gte } from "drizzle-orm";
 
 export async function PlayersProcess() {
+    const HOUR_MS = 60 * 60 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const playerRows = await db.select().from(playersData).where(gte(playersData.timestamp, thirtyDaysAgo.toISOString()));
 
     const now = new Date();
+    const truncatedHourNow = truncateToHourInPlace(new Date(), now);
+    const truncatedDayNow = truncateToDayInPlace(new Date(), now);
 
     const players24: Record<string, number> = {};
-    const plStart = new Date(truncateToHour(now).getTime() - 23 * 60 * 60 * 1000);
+    const plStartMs = truncatedHourNow.getTime() - 23 * HOUR_MS;
+    const temporaryPlStartDate = new Date(plStartMs);
     for (let i = 0; i < 24; i++) {
-        const d = new Date(plStart.getTime() + i * 60 * 60 * 1000);
-        const k = formatHourKey(d);
+        temporaryPlStartDate.setTime(plStartMs + i * HOUR_MS);
+        const k = formatHourKey(temporaryPlStartDate);
         players24[k] = 0;
     }
 
     const players7: Record<string, number> = {};
-    const pl7Start = new Date(truncateToDay(now).getTime() - 6 * 24 * 60 * 60 * 1000);
+    const pl7StartMs = truncatedDayNow.getTime() - 6 * DAY_MS;
+    const temporaryPl7StartDate = new Date(pl7StartMs);
     for (let i = 0; i < 7; i++) {
-        const d = new Date(pl7Start.getTime() + i * 24 * 60 * 60 * 1000);
-        const k = formatDayKey(d);
+        temporaryPl7StartDate.setTime(pl7StartMs + i * DAY_MS);
+        const k = formatDayKey(temporaryPl7StartDate);
         players7[k] = 0;
     }
 
     const players30: Record<string, number> = {};
-    const pl30Start = new Date(truncateToDay(now).getTime() - 29 * 24 * 60 * 60 * 1000);
+    const pl30StartMs = truncatedDayNow.getTime() - 29 * DAY_MS;
+    const temporaryPl30StartDate = new Date(pl30StartMs);
     for (let i = 0; i < 30; i++) {
-        const d = new Date(pl30Start.getTime() + i * 24 * 60 * 60 * 1000);
-        const k = formatDayKey(d);
+        temporaryPl30StartDate.setTime(pl30StartMs + i * DAY_MS);
+        const k = formatDayKey(temporaryPl30StartDate);
         players30[k] = 0;
     }
 
