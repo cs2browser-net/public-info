@@ -40,18 +40,11 @@ func PlayersProcess(ctx context.Context, database *gorm.DB, dryRun bool) error {
 		return nil
 	}
 
-	if _, err := ensureMetricsRow(ctx, database); err != nil {
-		return err
-	}
-
-	if err := database.WithContext(ctx).
-		Model(&models.Metrics{}).
-		Where(`"ID" = ?`, 1).
-		Updates(map[string]any{
-			"PlayersLast24Hours": players24,
-			"PlayersLast7Days":   players7,
-			"PlayersLast30Days":  players30,
-		}).Error; err != nil {
+	if err := updateMetricJSONColumns(ctx, database, map[string]models.JSONIntMap{
+		"PlayersLast24Hours": players24,
+		"PlayersLast7Days":   players7,
+		"PlayersLast30Days":  players30,
+	}); err != nil {
 		return fmt.Errorf("update player metrics: %w", err)
 	}
 

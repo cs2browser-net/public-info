@@ -16,7 +16,7 @@ type JSONIntMap map[string]int
 
 func (m JSONIntMap) Value() (driver.Value, error) {
 	if m == nil {
-		return []byte("{}"), nil
+		return "{}", nil
 	}
 
 	encoded, err := json.Marshal(m)
@@ -24,7 +24,7 @@ func (m JSONIntMap) Value() (driver.Value, error) {
 		return nil, fmt.Errorf("marshal JSONIntMap: %w", err)
 	}
 
-	return encoded, nil
+	return string(encoded), nil
 }
 
 func (m *JSONIntMap) Scan(value any) error {

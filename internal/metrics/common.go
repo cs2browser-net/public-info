@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/cs2browser-net/public-info/internal/models"
@@ -72,6 +74,57 @@ func logDryRunValues(processName string, values map[string]any) {
 	}
 
 	log.Printf("[dry-run] %s computed values:\n%s", processName, string(payload))
+}
+
+func marshalJSONIntMap(value models.JSONIntMap) (string, error) {
+	if value == nil {
+		value = models.JSONIntMap{}
+	}
+
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+
+	return string(payload), nil
+}
+
+func updateMetricJSONColumns(ctx context.Context, database *gorm.DB, columns map[string]models.JSONIntMap) error {
+	if len(columns) == 0 {
+		return nil
+	}
+
+	if _, err := ensureMetricsRow(ctx, database); err != nil {
+		return err
+	}
+
+	columnNames := make([]string, 0, len(columns))
+	for name := range columns {
+		columnNames = append(columnNames, name)
+	}
+	sort.Strings(columnNames)
+
+	assignments := make([]string, 0, len(columnNames))
+	args := make([]any, 0, len(columnNames)+1)
+
+	for _, columnName := range columnNames {
+		payload, err := marshalJSONIntMap(columns[columnName])
+		if err != nil {
+			return fmt.Errorf("marshal %s: %w", columnName, err)
+		}
+
+		assignments = append(assignments, fmt.Sprintf(`"%s" = ?::jsonb`, columnName))
+		args = append(args, payload)
+	}
+
+	args = append(args, 1)
+	query := fmt.Sprintf(`UPDATE "Metrics" SET %s WHERE "ID" = ?`, strings.Join(assignments, ", "))
+
+	if err := database.WithContext(ctx).Exec(query, args...).Error; err != nil {
+		return fmt.Errorf("update metrics json columns: %w", err)
+	}
+
+	return nil
 }
 
 func sanitizeMetricsRow(row *models.Metrics) {

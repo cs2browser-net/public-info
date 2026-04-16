@@ -51,18 +51,11 @@ func PrefilterProcess(ctx context.Context, database *gorm.DB, dryRun bool) error
 		return nil
 	}
 
-	if _, err := ensureMetricsRow(ctx, database); err != nil {
-		return err
-	}
-
-	if err := database.WithContext(ctx).
-		Model(&models.Metrics{}).
-		Where(`"ID" = ?`, 1).
-		Updates(map[string]any{
-			"PrefilterLast24Hours": new24,
-			"PrefilterLast7Days":   new7,
-			"PrefilterLast30Days":  new30,
-		}).Error; err != nil {
+	if err := updateMetricJSONColumns(ctx, database, map[string]models.JSONIntMap{
+		"PrefilterLast24Hours": new24,
+		"PrefilterLast7Days":   new7,
+		"PrefilterLast30Days":  new30,
+	}); err != nil {
 		return fmt.Errorf("update prefilter metrics: %w", err)
 	}
 

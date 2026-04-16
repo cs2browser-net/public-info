@@ -69,18 +69,11 @@ func FilterProcess(ctx context.Context, database *gorm.DB, dryRun bool) error {
 		return nil
 	}
 
-	if _, err := ensureMetricsRow(ctx, database); err != nil {
-		return err
-	}
-
-	if err := database.WithContext(ctx).
-		Model(&models.Metrics{}).
-		Where(`"ID" = ?`, 1).
-		Updates(map[string]any{
-			"CheckedLast24Hours": checked24,
-			"CheckedLast7Days":   checked7,
-			"CheckedLast30Days":  checked30,
-		}).Error; err != nil {
+	if err := updateMetricJSONColumns(ctx, database, map[string]models.JSONIntMap{
+		"CheckedLast24Hours": checked24,
+		"CheckedLast7Days":   checked7,
+		"CheckedLast30Days":  checked30,
+	}); err != nil {
 		return fmt.Errorf("update filtered metrics: %w", err)
 	}
 
