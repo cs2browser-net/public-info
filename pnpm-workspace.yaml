@@ -1,7 +1,0 @@
-onlyBuiltDependencies:
-  - '@prisma/engines'
-  - esbuild
-  - prisma
-
-packages:
-  - '*'
